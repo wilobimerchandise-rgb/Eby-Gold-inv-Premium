@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eby-Gold Superstores | POS v4.1</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root { --primary: #0a2540; --gold: #d4af37; --bg: #f4f7fa; --card: #ffffff; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+body { background: var(--bg); }
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; padding: 12px 20px; border-radius: 8px; display: none; }
+.btn { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.btn-gold { background: var(--gold); color: var(--primary); }
+.card { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; display: none; }
+.header { display: flex; justify-content: space-between; align-items: center; }
+.tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 2px solid var(--primary); }
+.tab { padding: 10px; cursor: pointer; font-weight: 600; }
+.tab.active { border-bottom: 3px solid var(--gold); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+.items-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.items-table th,.items-table td { border: 1px solid var(--primary); padding: 10px; font-size: 12px; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+.stat-card { padding: 15px; border-left: 4px solid var(--gold); background: white; }
+#previewBox { background: white; padding: 20px; border: 1px solid #ccc; margin-top: 20px; display: none; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<div style="display:flex; justify-content:center; align-items:center; height:100vh" id="loginScreen">
+    <div class="card" style="width:400px">
+        <h2 style="color:var(--primary); text-align:center">EBY-GOLD PREMIUM</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button class="btn" id="loginBtn" style="width:100%; margin-top:10px">Login</button>
+    </div>
+</div>
+
+<div class="container" id="appScreen">
+    <div class="header">
+        <h1>Premium Workstation</h1>
+        <div>
+            <button class="btn" id="backupBtn">⬇️ Backup</button>
+            <button class="btn" id="restoreBtn">⬆️ Restore</button>
+            <input type="file" id="importFile" style="display:none">
+            <button class="btn" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" id="tab-dashboard">📊 Dashboard</div>
+        <div class="tab" id="tab-invoice">🧾 Invoice</div>
+        <div class="tab" id="tab-customers">👥 Customers</div>
+    </div>
+
+    <div id="dashboardTab">
+        <div class="dashboard-grid">
+            <div class="stat-card"><h4>Total Sales</h4><h2 id="statSales">₦0</h2></div>
+            <div class="stat-card"><h4>Total Customers</h4><h2 id="statCustomers">0</h2></div>
+            <div class="stat-card"><h4>Last Backup</h4><h2 id="lastBackup" style="font-size:14px">Never</h2></div>
+        </div>
+    </div>
+
+    <div id="invoiceTab" style="display:none">
+        <div class="card">
+            <h3>New Invoice</h3>
+            <div class="grid">
+                <div><label>Customer</label><input id="billedTo" oninput="searchCustomer(this.value)"></div>
+                <div><label>Phone</label><input id="phone"></div>
+            </div>
+            <div id="customerSuggestions"></div>
+            <div class="grid" style="margin-top:10px">
+                <div><label>Item</label><input id="itemName"></div>
+                <div><label>Qty</label><input id="qty" type="number" value="1"></div>
+                <div><label>Rate ₦</label><input id="rate" type="number" value="0"></div>
+            </div>
+            <button class="btn btn-gold" id="addItemBtn">Add Item</button>
+            <table class="items-table" id="itemsTable"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Total</th><th></th></tr></thead><tbody></tbody></table>
+            <div class="grid">
+                <div><label><input type="checkbox" id="vat"> Add 7.5% VAT</label></div>
+                <div><button class="btn" id="previewBtn">👁️ Preview Invoice</button></div>
+                <div><button class="btn" id="pdfBtn">⬇️ Download PDF</button></div>
+            </div>
+            <button class="btn btn-gold" id="saveInvoiceBtn">💾 Save Invoice</button>
+            <div id="previewBox"></div>
+        </div>
+    </div>
+
+    <div id="customersTab" style="display:none">
+        <div class="card">
+            <h3>Add Customer</h3>
+            <div class="grid">
+                <div><input id="custName" placeholder="Name"></div>
+                <div><input id="custPhone" placeholder="Phone"></div>
+                <div><input id="custAddress" placeholder="Address"></div>
+                <button class="btn btn-gold" id="saveCustBtn">Save Customer</button>
+            </div>
+        </div>
+        <div class="card"><div id="customersList"></div></div>
+    </div>
+</div>
+
+<script>
+let items = [];
+let currentUser = "";
+function showToast(msg){ const t=document.getElementById('toast'); t.innerText=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',3000); }
+function saveLS(key, data){ localStorage.setItem(key, JSON.stringify(data)); }
+function getLS(key){ const d=localStorage.getItem(key); return d?JSON.parse(d):null; }
+function formatMoney(n){ return "₦" + parseFloat(n).toLocaleString('en-NG', {minimumFractionDigits:2}) }
+
+function numberToWords(num){
+    const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+    const b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+    function inWords(n){ if(n<20) return a[n]; if(n<100) return b[Math.floor(n/10)]+(n%10?a[n%10]:''); if(n<1000) return a[Math.floor(n/100)]+' Hundred '+(n%100?inWords(n%100):''); if(n<1000000) return inWords(Math.floor(n/1000))+' Thousand '+(n%1000?inWords(n%1000):''); return inWords(Math.floor(n/1000000))+' Million '+(n%1000000?inWords(n%1000000):''); }
+    let naira=Math.floor(num); let kobo=Math.round((num-naira)*100);
+    return inWords(naira)+' Naira '+(kobo>0?inWords(kobo)+' Kobo':'')+' Only';
+}
+
+document.getElementById('loginBtn').onclick = () => {
+    currentUser=document.getElementById('username').value.trim();
+    if(!currentUser) return showToast("Enter username");
+    localStorage.setItem('eby_user',currentUser);
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appScreen').style.display='block';
+    loadAll(); startAutoBackup();
+};
+document.getElementById('logoutBtn').onclick = () => { localStorage.removeItem('eby_user'); location.reload(); };
+
+['dashboard','invoice','customers'].forEach(tab => {
+    document.getElementById('tab-'+tab).onclick = () => {
+        document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+        document.querySelectorAll('#dashboardTab, #invoiceTab, #customersTab').forEach(d=>d.style.display='none');
+        document.getElementById('tab-'+tab).classList.add('active');
+        document.getElementById(tab+'Tab').style.display='block';
+    }
+});
+
+document.getElementById('saveCustBtn').onclick = function(){
+    let name=document.getElementById('custName').value.trim(); if(!name) return;
+    let customers=getLS('eby_clients')||[];
+    customers.push({name,phone:document.getElementById('custPhone').value,address:document.getElementById('custAddress').value});
+    saveLS('eby_clients', customers);
+    document.getElementById('custName').value='';document.getElementById('custPhone').value='';document.getElementById('custAddress').value='';
+    renderCustomers(); showToast("Customer Saved");
+}
+function renderCustomers(){
+    let customers=getLS('eby_clients')||[];
+    document.getElementById('statCustomers').innerText = customers.length;
+    let list=document.getElementById('customersList'); list.innerHTML='';
+    customers.forEach(c=>{ list.innerHTML+=`<div class="card"><b>${c.name}</b> - ${c.phone}</div>` });
+}
+function searchCustomer(val){
+    let customers=getLS('eby_clients')||[];
+    let div=document.getElementById('customerSuggestions'); div.innerHTML='';
+    customers.filter(c=>c.name.toLowerCase().includes(val.toLowerCase())).slice(0,3).forEach(c=>{
+        div.innerHTML+=`<div style="padding:8px; cursor:pointer; background:#eee" onclick="selectCustomer('${c.name}','${c.phone}')">${c.name}</div>`
+    });
+}
+function selectCustomer(n,p){ document.getElementById('billedTo').value=n; document.getElementById('phone').value=p; document.getElementById('customerSuggestions').innerHTML=''; }
+
+document.getElementById('addItemBtn').onclick = function(){
+    items.push({name:document.getElementById('itemName').value,qty:parseFloat(document.getElementById('qty').value),rate:parseFloat(document.getElementById('rate').value)});
+    renderTable();
+}
+function renderTable(){
+    let tbody=document.querySelector('#itemsTable tbody'); tbody.innerHTML='';
+    items.forEach((it,i)=>{ tbody.innerHTML+=`<tr><td>${it.name}</td><td>${it.qty}</td><td>${formatMoney(it.rate)}</td><td>${formatMoney(it.qty*it.rate)}</td><td onclick="items.splice(${i},1);renderTable()">X</td></tr>` });
+}
+document.getElementById('saveInvoiceBtn').onclick = function(){
+    let subtotal=items.reduce((a,b)=>a+b.qty*b.rate,0);
+    let vat=document.getElementById('vat').checked?subtotal*0.075:0;
+    let history=getLS('eby_history')||[]; history.push({customer:document.getElementById('billedTo').value, items, total:subtotal+vat, date:new Date().toLocaleString(), createdBy:currentUser});
+    saveLS('eby_history', history); showToast("Invoice Saved"); items=[]; renderTable(); loadDashboard();
+}
+
+// PREVIEW
+document.getElementById('previewBtn').onclick = function(){
+    let subtotal=items.reduce((a,b)=>a+b.qty*b.rate,0);
+    let vat=document.getElementById('vat').checked?subtotal*0.075:0;
+    let total=subtotal+vat;
+    let html=`<h3>EBY-GOLD SUPERSTORES</h3>
+    <p><b>Customer:</b> ${document.getElementById('billedTo').value}</p>
+    <p><b>Phone:</b> ${document.getElementById('phone').value}</p>
+    <p><b>Created By:</b> ${currentUser}</p>`;
+    html+=document.getElementById('itemsTable').outerHTML;
+    html+=`<p><b>Amount in Words:</b> <u>${numberToWords(total)}</u></p>
+    <p><i>Thank you for your continued patronage</i></p>`;
+    document.getElementById('previewBox').innerHTML=html; document.getElementById('previewBox').style.display='block';
+}
+
+// PDF WITH TABLES
+document.getElementById('pdfBtn').onclick = function(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let subtotal=items.reduce((a,b)=>a+b.qty*b.rate,0);
+    let vat=document.getElementById('vat').checked?subtotal*0.075:0;
+    let total=subtotal+vat;
+    
+    doc.setFontSize(16); doc.text("EBY-GOLD SUPERSTORES", 105, 15, {align:"center"});
+    doc.setFontSize(10); doc.text(`Customer: ${document.getElementById('billedTo').value}`, 14, 30);
+    doc.text(`Phone: ${document.getElementById('phone').value}`, 14, 36);
+    doc.text(`Created By: ${currentUser}`, 14, 42);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 48);
+
+    doc.autoTable({startY:55, head:[['Item','Qty','Rate','Total']], 
+        body:items.map(it=>[it.name,it.qty,formatMoney(it.rate),formatMoney(it.qty*it.rate)]),
+        theme:'grid', styles:{fontSize:9}});
+
+    let y=doc.lastAutoTable.finalY+10;
+    doc.autoTable({startY:y, head:[['Subtotal','VAT','Grand Total']], 
+        body:[[formatMoney(subtotal),formatMoney(vat),formatMoney(total)]], theme:'grid'});
+    
+    y=doc.lastAutoTable.finalY+10;
+    doc.text("Amount in Words:", 14, y);
+    doc.text(numberToWords(total), 14, y+6, {maxWidth:180});
+    doc.line(14, y+8, 14+doc.getTextWidth(numberToWords(total)), y+8); // underline
+
+    y=doc.lastAutoTable.finalY+25;
+    doc.autoTable({startY:y, head:[['Payment Information']], body:[['Bank: Zenith Bank','Account: 1234567890','Account Name: EBY-GOLD']], theme:'grid'});
+
+    doc.setFontSize(9); doc.text("Thank you for your continued patronage", 105, 285, {align:"center"});
+    doc.save('EbyGold-Invoice.pdf');
+}
+
+function loadDashboard(){
+    let history=getLS('eby_history')||[];
+    let sales=history.reduce((a,b)=>a+b.total,0);
+    document.getElementById('statSales').innerText=formatMoney(sales);
+}
+function startAutoBackup(){ setInterval(()=>{ const last=localStorage.getItem('eby_last_backup')||0; if(Date.now() - last > 24*60*60*1000){ document.getElementById('backupBtn').click(); } }, 60*60*1000); }
+document.getElementById('backupBtn').onclick = function(){ const data={ clients:getLS('eby_clients'), history:getLS('eby_history') }; const blob=new Blob([JSON.stringify(data)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='eby-backup-'+new Date().toISOString().split('T')[0]+'.json'; a.click(); localStorage.setItem('eby_last_backup', Date.now()); document.getElementById('lastBackup').innerText = new Date().toLocaleDateString(); showToast("Backup Downloaded"); }
+document.getElementById('restoreBtn').onclick = () => document.getElementById('importFile').click();
+document.getElementById('importFile').onchange = (e) => { const reader=new FileReader(); reader.onload=evt=>{ const data=JSON.parse(evt.target.result); for(let k in data) saveLS('eby_'+k, data[k]); showToast("Restore Complete"); location.reload(); } reader.readAsText(e.target.files[0]); }
+function loadAll(){ currentUser=localStorage.getItem('eby_user')||""; renderCustomers(); loadDashboard(); }
+window.onload = () => { if(localStorage.getItem('eby_user')){ currentUser=localStorage.getItem('eby_user'); document.getElementById('loginScreen').style.display='none'; document.getElementById('appScreen').style.display='block'; loadAll(); } }
+</script>
+</body>
+</html>
