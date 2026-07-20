@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eby-Gold Superstores | POS v3.3</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root { --primary: #0a2540; --gold: #d4af37; --bg: #f4f7fa; --card: #ffffff; --text: #1a202c; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+body { background: var(--bg); color: var(--text); }
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; padding: 12px 20px; border-radius: 8px; z-index: 999; display: none; }
+.btn { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.btn-gold { background: var(--gold); color: var(--primary); }
+.card { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; display: none; }
+.tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--primary); }
+.tab { padding: 10px 20px; cursor: pointer; font-weight: 600; }
+.tab.active { border-bottom: 3px solid var(--gold); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+.items-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.items-table th,.items-table td { border: 1px solid var(--primary); padding: 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- LOGIN -->
+<div style="display:flex; justify-content:center; align-items:center; height:100vh" id="loginScreen">
+    <div class="card" style="width:400px">
+        <h2 style="color:var(--primary); text-align:center">EBY-GOLD PREMIUM</h2>
+        <input type="text" id="username" placeholder="Username" value="Admin">
+        <input type="password" id="password" placeholder="Any Password">
+        <button class="btn" id="loginBtn">Login</button>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="container" id="appScreen">
+    <div style="display:flex; justify-content:space-between">
+        <h1>Premium Workstation</h1>
+        <button class="btn" id="logoutBtn">Logout</button>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" id="tab-dashboard">📊 Dashboard</div>
+        <div class="tab" id="tab-invoice">🧾 Invoice</div>
+        <div class="tab" id="tab-customers">👥 Customers</div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboardTab">
+        <div class="card"><h3>Total Customers: <span id="statCustomers">0</span></h3></div>
+    </div>
+
+    <!-- INVOICE -->
+    <div id="invoiceTab" style="display:none">
+        <div class="card">
+            <h3>New Invoice</h3>
+            <div class="grid">
+                <div><label>Customer</label><input id="billedTo"></div>
+                <div><label>Item</label><input id="itemName"></div>
+                <div><label>Qty</label><input id="qty" type="number" value="1"></div>
+                <div><label>Rate</label><input id="rate" type="number" value="0"></div>
+            </div>
+            <button class="btn btn-gold" id="addItemBtn">Add Item</button>
+            <table class="items-table" id="itemsTable"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead><tbody></tbody></table>
+            <button class="btn" id="saveInvoiceBtn">💾 Save Invoice</button>
+        </div>
+    </div>
+
+    <!-- CUSTOMERS -->
+    <div id="customersTab" style="display:none">
+        <div class="card">
+            <h3>Add Customer</h3>
+            <div class="grid">
+                <div><input id="custName" placeholder="Name"></div>
+                <div><input id="custPhone" placeholder="Phone"></div>
+                <button class="btn btn-gold" id="saveCustBtn">Save Customer</button>
+            </div>
+        </div>
+        <div class="card"><div id="customersList"></div></div>
+    </div>
+</div>
+
+<script>
+let items = [];
+function showToast(msg){ const t=document.getElementById('toast'); t.innerText=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',3000); }
+
+// NO ENCRYPTION - DIRECT LOCALSTORAGE
+function saveLS(key, data){ localStorage.setItem(key, JSON.stringify(data)); }
+function getLS(key){ const d=localStorage.getItem(key); return d?JSON.parse(d):null; }
+
+// LOGIN WITH EVENT LISTENER INSTEAD OF ONCLICK
+document.getElementById('loginBtn').addEventListener('click', function(){
+    let u=document.getElementById('username').value.trim();
+    if(!u) return showToast("Enter username");
+    localStorage.setItem('eby_user',u);
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appScreen').style.display='block';
+    loadAll();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', function(){ localStorage.removeItem('eby_user'); location.reload(); });
+
+// TABS
+document.getElementById('tab-dashboard').onclick = () => switchTab('dashboard');
+document.getElementById('tab-invoice').onclick = () => switchTab('invoice');
+document.getElementById('tab-customers').onclick = () => switchTab('customers');
+function switchTab(tab){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('#dashboardTab, #invoiceTab, #customersTab').forEach(d=>d.style.display='none');
+    document.getElementById('tab-'+tab).classList.add('active');
+    document.getElementById(tab+'Tab').style.display='block';
+}
+
+// CUSTOMERS
+document.getElementById('saveCustBtn').onclick = function(){
+    let name=document.getElementById('custName').value.trim();
+    if(!name) return;
+    let customers=getLS('eby_clients')||[];
+    customers.push({name,phone:document.getElementById('custPhone').value});
+    saveLS('eby_clients', customers);
+    document.getElementById('custName').value='';
+    renderCustomers(); showToast("Customer Saved");
+}
+function renderCustomers(){
+    let customers=getLS('eby_clients')||[];
+    document.getElementById('statCustomers').innerText = customers.length;
+    let list=document.getElementById('customersList'); list.innerHTML='';
+    customers.forEach(c=>{ list.innerHTML+=`<div class="card"><b>${c.name}</b> - ${c.phone}</div>` });
+}
+
+// INVOICE
+document.getElementById('addItemBtn').onclick = function(){
+    items.push({name:document.getElementById('itemName').value,qty:document.getElementById('qty').value,rate:document.getElementById('rate').value});
+    renderTable();
+}
+function renderTable(){
+    let tbody=document.querySelector('#itemsTable tbody'); tbody.innerHTML='';
+    items.forEach(it=>{ tbody.innerHTML+=`<tr><td>${it.name}</td><td>${it.qty}</td><td>${it.rate}</td><td>${it.qty*it.rate}</td></tr>` });
+}
+document.getElementById('saveInvoiceBtn').onclick = function(){
+    let history=getLS('eby_history')||[]; history.push({customer:document.getElementById('billedTo').value, items});
+    saveLS('eby_history', history); showToast("Invoice Saved"); items=[]; renderTable();
+}
+
+function loadAll(){ renderCustomers(); }
+
+// AUTO LOGIN
+window.onload = () => {
+    if(localStorage.getItem('eby_user')){
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('appScreen').style.display='block';
+        loadAll();
+    }
+}
+</script>
+</body>
+</html>
