@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eby-Gold Superstores | Premium Invoice App v3 PWA</title>
+<meta name="theme-color" content="#0a2540">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+    --primary: #0a2540;
+    --gold: #d4af37;
+    --bg: #f4f7fa;
+    --card: #ffffff;
+    --text: #1a202c;
+}
+[data-theme="dark"] {
+    --primary: #d4af37;
+    --gold: #0a2540;
+    --bg: #1a202c;
+    --card: #2d3748;
+    --text: #f7fafc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+body { background: var(--bg); color: var(--text); transition: 0.3s; }
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; padding: 12px 20px; border-radius: 8px; z-index: 999; display: none; }
+.install-banner { position: fixed; bottom: 0; left: 0; right: 0; background: var(--primary); color: white; padding: 15px; display: none; justify-content: space-between; align-items: center; z-index: 1000; }
+.btn { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.btn-gold { background: var(--gold); color: var(--primary); }
+.card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; display: none; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+.tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--primary); }
+.tab { padding: 10px 20px; cursor: pointer; font-weight: 600; }
+.tab.active { border-bottom: 3px solid var(--gold); color: var(--primary); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background: var(--card); color: var(--text); }
+.items-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.items-table th,.items-table td { border: 1px solid var(--primary); padding: 10px; text-align: left; font-size: 12px; }
+.items-table th { background: var(--primary); color: white; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.stat-card { padding: 15px; border-left: 4px solid var(--gold); }
+.customer-item { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+<div class="install-banner" id="installBanner">
+    <span>📲 Install Eby-Gold App for offline use & auto backup</span>
+    <button class="btn btn-gold" id="installBtn">Install</button>
+</div>
+
+<!-- LOGIN -->
+<div style="display:flex; justify-content:center; align-items:center; height:100vh" id="loginScreen">
+    <div class="card" style="width:400px">
+        <h2 style="color:var(--primary); text-align:center">EBY-GOLD PREMIUM PWA</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Master Encryption Key">
+        <button class="btn" style="width:100%; margin-top:10px" onclick="login()">Login</button>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="container" id="appScreen">
+    <div class="header">
+        <h1>Premium Workstation <span id="offlineStatus" style="font-size:12px; color:green"></span></h1>
+        <div>
+            <button class="btn btn-gold" onclick="toggleTheme()">🌙 Theme</button>
+            <button class="btn" onclick="exportDB()">⬇️ Backup Now</button>
+            <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ Restore</button>
+            <input type="file" id="importFile" style="display:none" onchange="importDB(event)">
+            <button class="btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</div>
+        <div class="tab" onclick="switchTab('invoice')">🧾 New Invoice</div>
+        <div class="tab" onclick="switchTab('customers')">👥 Customers</div>
+    </div>
+
+    <!-- DASHBOARD TAB -->
+    <div id="dashboardTab">
+        <div class="dashboard-grid">
+            <div class="card stat-card"><h4>Total Sales</h4><h2 id="statSales">NGN 0</h2></div>
+            <div class="card stat-card"><h4>Total VAT</h4><h2 id="statVAT">NGN 0</h2></div>
+            <div class="card stat-card"><h4>Total Customers</h4><h2 id="statCustomers">0</h2></div>
+            <div class="card stat-card"><h4>Last Backup</h4><h2 id="lastBackup" style="font-size:14px">Never</h2></div>
+        </div>
+        <div class="card"><canvas id="salesChart" height="80"></canvas></div>
+    </div>
+
+    <!-- INVOICE TAB
