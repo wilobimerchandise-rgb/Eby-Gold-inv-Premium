@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eby-Gold Superstores | Premium POS v3.2</title>
+<meta name="theme-color" content="#0a2540">
+<link rel="manifest" href="manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root { --primary: #0a2540; --gold: #d4af37; --bg: #f4f7fa; --card: #ffffff; --text: #1a202c; }
+[data-theme="dark"] { --primary: #d4af37; --gold: #0a2540; --bg: #1a202c; --card: #2d3748; --text: #f7fafc; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+body { background: var(--bg); color: var(--text); }
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; padding: 12px 20px; border-radius: 8px; z-index: 999; display: none; }
+.install-banner { position: fixed; bottom: 0; left: 0; right: 0; background: var(--primary); color: white; padding: 15px; display: none; justify-content: space-between; z-index: 1000; }
+.btn { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.btn-gold { background: var(--gold); color: var(--primary); }
+.btn-sm { padding: 6px 10px; font-size: 11px; }
+.card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; display: none; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+.tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--primary); }
+.tab { padding: 10px 20px; cursor: pointer; font-weight: 600; }
+.tab.active { border-bottom: 3px solid var(--gold); color: var(--primary); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background: var(--card); color: var(--text); }
+.items-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.items-table th,.items-table td { border: 1px solid var(--primary); padding: 10px; text-align: left; font-size: 12px; }
+.items-table th { background: var(--primary); color: white; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.stat-card { padding: 15px; border-left: 4px solid var(--gold); }
+.customer-item { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+<div class="install-banner" id="installBanner">
+    <span>📲 Install Eby-Gold App for offline use</span>
+    <button class="btn btn-gold" id="installBtn">Install</button>
+</div>
+
+<!-- LOGIN -->
+<div style="display:flex; justify-content:center; align-items:center; height:100vh" id="loginScreen">
+    <div class="card" style="width:400px">
+        <h2 style="color:var(--primary); text-align:center">EBY-GOLD PREMIUM</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Master Encryption Key">
+        <button class="btn" onclick="login()">Login / Create Account</button>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="container" id="appScreen">
+    <div class="header">
+        <h1>Premium Workstation</h1>
+        <div>
+            <button class="btn btn-gold" onclick="toggleTheme()">🌙</button>
+            <button class="btn" onclick="exportDB()">⬇️ Backup</button>
+            <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ Restore</button>
+            <input type="file" id="importFile" style="display:none" onchange="importDB(event)">
+            <button class="btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</div>
+        <div class="tab" onclick="switchTab('invoice')">🧾 New Invoice</div>
+        <div class="tab" onclick="switchTab('customers')">👥 Customers</div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboardTab">
+        <div class="dashboard-grid">
+            <div class="card stat-card"><h4>Total Sales</h4><h2 id="statSales">NGN 0</h2></div>
+            <div class="card stat-card"><h4>Total VAT</h4><h2 id="statVAT">NGN 0</h2></div>
+            <div class="card stat-card"><h4>Customers</h4><h2 id="statCustomers">0</h2></div>
+            <div class="card stat-card"><h4>Last Backup</h4><h2 id="lastBackup" style="font-size:14px">Never</h2></div>
+        </div>
+        <div class="card"><canvas id="salesChart" height="80"></canvas></div>
+    </div>
+
+    <!-- INVOICE -->
+    <div id="invoiceTab" style="display:none">
+        <div class="card">
+            <h3>Customer Details</h3>
+            <div class="grid">
+                <div><label>Billed To</label><input id="billedTo" oninput="searchCustomer(this.value)"></div>
+                <div><label>Phone</label><input id="phone"></div>
+                <div><label>Address</label><input id="address"></div>
+            </div>
+            <div id="customerSuggestions"></div>
+        </div>
+        <div class="card">
+            <h3>Add Items</h3>
+            <div class="grid">
+                <div><label>Item</label><input id="itemName"></div>
+                <div><label>Qty</label><input id="qty" type="number" value="1"></div>
+                <div><label>Rate</label><input id="rate" type="number" value="0"></div>
+                <div><button class="btn btn-gold" onclick="addItem()">Add</button></div>
+            </div>
+            <table class="items-table" id="itemsTable"><thead><tr><th>S/N</th><th>Items</th><th>Qty</th><th>Rate</th><th>Total</th><th></th></tr></thead><tbody></tbody></table>
+            <div class="grid">
+                <div><label><input type="checkbox" id="vat"> Add 7.5% VAT</label></div>
+                <div><label>Print</label><select id="printSize"><option value="a4">A4</option><option value="pos">80mm POS</option></select></div>
+            </div>
+            <button class="btn btn-gold" onclick="saveInvoice()">💾 Save Invoice</button>
+        </div>
+    </div>
+
+    <!-- CUSTOMERS -->
+    <div id="customersTab" style="display:none">
+        <div class="card">
+            <h3>Customer Database</h3>
+            <div class="grid">
+                <div><input id="custName" placeholder="Name"></div>
+                <div><input id="custPhone" placeholder="Phone"></div>
+                <div><input id="custAddress" placeholder="Address"></div>
+                <div><button class="btn btn-gold" onclick="saveCustomer()">Save</button></div>
+            </div>
+        </div>
+        <div class="card"><div id="customersList"></div></div>
+    </div>
+</div>
+
+<script>
+let items = [];
+let ENCRYPT_KEY = "";
+let deferredPrompt;
+
+// UTILS
+function showToast(msg){ const t=document.getElementById('toast'); t.innerText=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',3000); }
+function toggleTheme(){ document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'); }
+function encrypt(data){ return CryptoJS.AES.encrypt(JSON.stringify(data), ENCRYPT_KEY).toString(); }
+function decrypt(data){ if(!data) return null; try{ return JSON.parse(CryptoJS.AES.decrypt(data, ENCRYPT_KEY).toString(CryptoJS.enc.Utf8)); }catch(e){ return null; }
+function saveLS(key, data){ localStorage.setItem(key, encrypt(data)); }
+function getLS(key){ const d=localStorage.getItem(key); return d?decrypt(d):null; }
+
+// PWA INSTALL
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('installBanner').style.display = 'flex'; });
+document.getElementById('installBtn').addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; document.getElementById('installBanner').style.display = 'none'; } });
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+
+// AUTO BACKUP
+function startAutoBackup(){ setInterval(()=>{ const last=localStorage.getItem('eby_last_backup')||0; if(Date.now() - last > 24*60*60*1000){ exportDB(); showToast("Auto Backup Done"); } }, 60*60*1000); }
+
+// LOGIN - FIXED
+function login(){
+    let u=document.getElementById('username').value.trim();
+    let p=document.getElementById('password').value.trim();
+    if(!u||!p) return showToast("Enter username and key");
+    ENCRYPT_KEY=p;
+    localStorage.setItem('eby_user',u);
+    localStorage.setItem('eby_master',p);
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appScreen').style.display='block';
+    loadDashboard(); renderCustomers(); startAutoBackup(); updateLastBackup();
+}
+function logout(){ localStorage.removeItem('eby_user'); localStorage.removeItem('eby_master'); location.reload(); }
+
+// TABS
+function switchTab(tab){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('#dashboardTab, #invoiceTab, #customersTab').forEach(d=>d.style.display='none');
+    event.target.classList.add('active');
+    document.getElementById(tab+'Tab').style.display='block';
+}
+
+// CUSTOMERS
+function saveCustomer(){
+    let name=document.getElementById('custName').value.trim();
+    let phone=document.getElementById('custPhone').value.trim();
+    let address=document.getElementById('custAddress').value.trim();
+    if(!name) return showToast("Name required");
+    let customers=getLS('eby_clients')||[];
+    customers.push({name,phone,address,id:Date.now()});
+    saveLS('eby_clients', customers);
+    document.getElementById('custName').value=''; document.getElementById('custPhone').value=''; document.getElementById('custAddress').value='';
+    renderCustomers(); showToast("Customer Saved");
+}
+function renderCustomers(){
+    let customers=getLS('eby_clients')||[];
+    let list=document.getElementById('customersList'); list.innerHTML='';
+    customers.forEach(c=>{ list.innerHTML+=`<div class="customer-item"><div><b>${c.name}</b><br><small>${c.phone}</small></div></div>` });
+}
+function searchCustomer(val){
+    let customers=getLS('eby_clients')||[];
+    let div=document.getElementById('customerSuggestions'); div.innerHTML='';
+    customers.filter(c=>c.name.toLowerCase().includes(val.toLowerCase())).slice(0,3).forEach(c=>{
+        div.innerHTML+=`<div style="padding:8px; cursor:pointer; background:#eee" onclick="selectCustomer('${c.name}','${c.phone}','${c.address}')">${c.name}</div>`
+    });
+}
+function selectCustomer(n,p,a){ document.getElementById('billedTo').value=n; document.getElementById('phone').value=p; document.getElementById('address').value=a; document.getElementById('customerSuggestions').innerHTML=''; }
+
+// INVOICE
+function addItem(){
+    let name=document.getElementById('itemName').value;
+    let qty=parseFloat(document.getElementById('qty').value);
+    let rate=parseFloat(document.getElementById('rate').value);
+    if(!name||qty<=0) return showToast("Enter valid item");
+    items.push({name,qty,rate,total:qty*rate});
+    renderTable();
+}
+function renderTable(){
+    let tbody=document.querySelector('#itemsTable tbody'); tbody.innerHTML='';
+    items.forEach((it,i)=>{ tbody.innerHTML+=`<tr><td>${i+1}</td><td>${it.name}</td><td>${it.qty}</td><td>NGN ${it.rate.toLocaleString()}</td><td>NGN ${it.total.toLocaleString()}</td><td onclick="items.splice(${i},1);renderTable()">X</td></tr>` });
+}
+function saveInvoice(){
+    let subtotal=items.reduce((a,b)=>a+b.total,0);
+    let vat=document.getElementById('vat').checked?subtotal*0.075:0;
+    let total=subtotal+vat;
+    let inv={ id:'EGS-'+Date.now(), customer:document.getElementById('billedTo').value, items, subtotal, vat, total, date:new Date().toLocaleString() };
+    let history=getLS('eby_history')||[]; history.unshift(inv); saveLS('eby_history', history);
+    showToast("Invoice Saved"); loadDashboard(); items=[]; renderTable();
+}
+
+// DASHBOARD + BACKUP
+function loadDashboard(){
+    let history=getLS('eby_history')||[]; let customers=getLS('eby_clients')||[];
+    let sales=0, vat=0; history.forEach(inv=>{ sales+=inv.total; vat+=inv.vat||0; });
+    document.getElementById('statSales').innerText='NGN '+sales.toLocaleString();
+    document.getElementById('statVAT').innerText='NGN '+vat.toLocaleString();
+    document.getElementById('statCustomers').innerText=customers.length;
+}
+function exportDB(){
+    const data={ clients:getLS('eby_clients'), history:getLS('eby_history') };
+    const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='eby-backup-'+new Date().toISOString().split('T')[0]+'.json'; a.click();
+    localStorage.setItem('eby_last_backup', Date.now()); updateLastBackup();
+}
+function updateLastBackup(){ const last=localStorage.getItem('eby_last_backup'); document.getElementById('lastBackup').innerText = last? new Date(parseInt(last)).toLocaleDateString() : 'Never'; }
+function importDB(e){ const file=e.target.files[0]; const reader=new FileReader(); reader.onload=evt=>{ const data=JSON.parse(evt.target.result); for(let k in data) saveLS('eby_'+k, data[k]); showToast("Restore Complete"); location.reload(); } reader.readAsText(file); }
+
+// AUTO LOGIN
+window.onload = () => {
+    let user = localStorage.getItem('eby_user');
+    let key = localStorage.getItem('eby_master');
+    if(user && key){
+        ENCRYPT_KEY = key;
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('appScreen').style.display='block';
+        loadDashboard(); renderCustomers(); startAutoBackup(); updateLastBackup();
+    }
+}
+</script>
+</body>
+</html>
